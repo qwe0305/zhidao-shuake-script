@@ -315,7 +315,7 @@ if args.aicourse:
 exec_list = getRealPath("execution.json")
 # fetch course list
 if args.fetch:
-    with open(exec_list, "w") as f:
+    with open(exec_list, "w", encoding="UTF-8") as f:
         zhidao_ids = [{"name": c.courseName, "id": c.secret}
                       for c in fucker.getZhidaoList()]
         hike_ids = [{"name": c.courseName, "id": str(
@@ -325,7 +325,7 @@ if args.fetch:
 
 # get courses from file if not specified
 if not course and os.path.isfile(exec_list):
-    with open(exec_list, "r") as f:
+    with open(exec_list, "r", encoding="UTF-8") as f:
         try:
             course = [str(c["id"]) for c in json.load(f)]
         except Exception as e:
