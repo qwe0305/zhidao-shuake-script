@@ -64,6 +64,10 @@ def terminalShowImage_tty(img):
     print(qr_str)
 
 def getDir():
+    # PyInstaller 打包（onefile）时 __file__ 指向临时解压目录，
+    # 配置/缓存/日志会写到 temp 里，exe 一关就丢。改用 exe 自身所在目录。
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
     return os.path.dirname(os.path.realpath(__file__))
 
 def getConfigPath():
