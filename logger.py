@@ -2,7 +2,27 @@
 # -*- coding: utf-8 -*-
 import logging
 import os
+from contextlib import suppress
 from utils import getRealPath
+
+
+def _make_handler(path: str, max_mb: int = 5) -> logging.FileHandler:
+    """以「追加」模式打开日志文件，超限则滚动一次。
+
+    原实现用 mode='w'，导致每次启动（包括只是看一眼 -h 帮助）
+    都会把历史日志全部清空，多实例还会互相截断。
+    """
+    try:
+        if os.path.exists(path) and os.path.getsize(path) > max_mb * 1024 * 1024:
+            backup = path + ".1"
+            with suppress(OSError):
+                if os.path.exists(backup):
+                    os.remove(backup)
+                os.replace(path, backup)
+    except OSError:
+        pass
+    return logging.FileHandler(path, mode='a', encoding="utf-8")
+
 
 class MonoLogger:
     _logger_map = {}
@@ -25,15 +45,15 @@ class MonoLogger:
         self.setLevel(level)
 
         self._console_hdlr = logging.StreamHandler()
-        self._debug_hdlr = logging.FileHandler(os.path.join(self.path, "debug.log"), mode='w', encoding="utf-8")
+        self._debug_hdlr = _make_handler(os.path.join(self.path, "debug.log"))
         self._debug.addHandler(self._debug_hdlr)
-        self._info_hdlr = logging.FileHandler(os.path.join(self.path, "info.log"), mode='w', encoding="utf-8")
+        self._info_hdlr = _make_handler(os.path.join(self.path, "info.log"))
         self._info.addHandler(self._info_hdlr)
-        self._warning_hdlr = logging.FileHandler(os.path.join(self.path, "warning.log"), mode='w', encoding="utf-8")
+        self._warning_hdlr = _make_handler(os.path.join(self.path, "warning.log"))
         self._warning.addHandler(self._warning_hdlr)
-        self._error_hdlr = logging.FileHandler(os.path.join(self.path, "error.log"), mode='w', encoding="utf-8")
+        self._error_hdlr = _make_handler(os.path.join(self.path, "error.log"))
         self._error.addHandler(self._error_hdlr)
-        self._critical_hdlr = logging.FileHandler(os.path.join(self.path, "critical.log"), mode='w', encoding="utf-8")
+        self._critical_hdlr = _make_handler(os.path.join(self.path, "critical.log"))
         self._critical.addHandler(self._critical_hdlr)
         self.setFormatter(formatter)
         self.toConsole(to_console)

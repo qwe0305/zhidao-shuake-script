@@ -8,6 +8,7 @@ from functools import partial
 from contextlib import suppress
 from fucker import Fucker
 from logger import logger
+from stability import StabilityGuard
 from ObjDict import ObjDict
 from utils import showImage, cookie_jar_to_list
 from utils import getConfigPath, getRealPath, versionCmp
@@ -34,14 +35,21 @@ DEFAULT_CONFIG = {
         "enable": False,
         "token": "https://example.com/xxxxxxxxx"
     },
-    "config_version": "1.4.0",
+    "config_version": "1.5.0",
     "ai": {
         "enabled": True,
+        # True = 用智慧树自带 AI 答题（免 key）；False = 用下面配置的大模型答题
         "use_zhidao_ai": True,
         "openai": {
-            "api_base": "https://api.openai.com",
-            "api_key": "sk-",
-            "model_name": "claude-3-5-sonnet-20240620"
+            # 预设服务商：deepseek / dashscope(通义) / moonshot(Kimi) / zhipu / siliconflow / openai
+            # 填了 provider 后，api_base 和 model_name 可以留空，会自动用预设值
+            "provider": "",
+            "api_base": "https://api.deepseek.com/v1",
+            "api_key": "",
+            "model_name": "deepseek-chat",
+            "timeout": 45,
+            "max_retries": 3,
+            "temperature": 0.2
         },
         "ppt_processing": {
             "provide_to_ai": False,
@@ -55,6 +63,21 @@ DEFAULT_CONFIG = {
     }
 }
 # get config or create one if not exist
+def deepMerge(base: dict, override: dict) -> dict:
+    """递归合并配置：override 优先，但 base 里新增的字段会被保留。
+
+    原实现只做顶层 update，导致升级后 ai.openai 里新增的字段
+    （provider / timeout 等）在旧配置文件里丢失。
+    """
+    result = dict(base)
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(result.get(k), dict):
+            result[k] = deepMerge(result[k], v)
+        else:
+            result[k] = v
+    return result
+
+
 if os.path.isfile(getConfigPath()):
     with open(getConfigPath(), 'r+', encoding="UTF-8") as f:
         # 不指定编码格式会导致config中可能存在的中文字符乱码
@@ -69,8 +92,7 @@ if os.path.isfile(getConfigPath()):
                 pushplus = config.pop("push", {})
                 new.pushplus.update(pushplus)
             config.pop("config_version", None)
-            new.update(config)
-            config = new
+            config = ObjDict(deepMerge(DEFAULT_CONFIG, dict(config)), default=None)
             f.seek(0)
             json.dump(config, f, indent=4)
             f.truncate()
@@ -180,6 +202,10 @@ with open(getRealPath("meta.json"), "r") as f:
 fucker = Fucker(proxies=proxies, speed=args.speed, end_thre=args.threshold, limit=args.limit,
                 pushplus_token=pushplus_token, bark_token=bark_token, tree_view=tree_view, progressbar_view=progressbar_view, image_path=image_path)
 
+# 加固：断网自动等待恢复、风控自动冷却重试、超时自动重试
+guard = StabilityGuard()
+guard.patch(fucker)
+
 cookies_path = getRealPath("./cookies.json")
 cookies_loaded = False
 if save_cookies and os.path.exists(cookies_path):
@@ -233,7 +259,8 @@ if args.aicourse:
             if not isinstance(ai_config, dict):
                 raise ValueError("AI配置不是字典，请检查配置文件")
 
-            if ai_config.get("enabled", False) and ai_config.get("use_zhidao_ai", False):
+            # 只有走自建模型时才需要校验 openai 配置；用智慧树自带 AI 不需要 key
+            if ai_config.get("enabled", False) and not ai_config.get("use_zhidao_ai", False):
                 validate_openai_config(ai_config.get("openai", {}))
             
             validate_ppt_config(ai_config.get("ppt_processing", {}))
@@ -241,6 +268,10 @@ if args.aicourse:
         def validate_openai_config(openai_config):
             if not isinstance(openai_config, dict):
                 raise ValueError(f"OpenAI配置不是字典，而是{type(openai_config)}，请检查配置文件")
+            
+            # 填了 provider 预设（deepseek/dashscope/moonshot/zhipu 等）时，地址和模型名可省略
+            if openai_config.get("provider"):
+                return
             
             required_fields = ["api_key", "api_base", "model_name"]
             missing_fields = [field for field in required_fields if not openai_config.get(field)]

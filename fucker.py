@@ -13,6 +13,7 @@ from threading import Thread
 from getpass import getpass
 from ObjDict import ObjDict
 from logger import logger
+from ai_provider import create_provider
 from push import pushpluser
 from push import barkpusher
 from sign import sign
@@ -1537,27 +1538,30 @@ class ExamCtx:
         self.timeUpdateIndex = 0
         self.examStopped = False
 
-        if aiConfig.get("enabled", False) and not aiConfig.get("use_zhidao_ai", False):
-            opConf: dict = aiConfig.get("openai", {})
-            self.op = Openai(
-                baseUrl=opConf.get("api_base", "https://api.openai.com/v1"),
-                apiKey=opConf.get("api_key", ""),
-                modelName=opConf.get("model_name", "davinci"),
-                stream=aiConfig.get("use_stream", False),
-                extra=opExtra,
-            )
+        self.op = None
+        if aiConfig.get("enabled", False):
+            use_zhidao = aiConfig.get("use_zhidao_ai", False)
 
-        if aiConfig.get("enabled", False) and aiConfig.get("use_zhidao_ai", False):
-            session = requests.Session()
-            session.cookies.update(fucker.session.cookies)
-            session.headers.update(fucker.session.headers)
-            session.proxies.update(fucker.proxies)
-            self.op = Openai(
-                useZhidao=True,
-                zhiDaosession=session,
-                stream=aiConfig.get("use_stream", False),
-                extra=opExtra,
-            )
+            # 优先尝试自建大模型（DeepSeek/通义/Kimi 等 OpenAI 兼容接口）
+            if not use_zhidao:
+                opConf: dict = aiConfig.get("openai", {})
+                provider = create_provider(opConf, opExtra)
+                if provider is not None:
+                    self.op = provider
+
+            # 没配有效 key（或明确选了智慧树 AI）→ 回退到智慧树自带 AI
+            # 这样即使 key 填错也不会让整个答题流程崩掉
+            if self.op is None:
+                session = requests.Session()
+                session.cookies.update(fucker.session.cookies)
+                session.headers.update(fucker.session.headers)
+                session.proxies.update(fucker.proxies)
+                self.op = Openai(
+                    useZhidao=True,
+                    zhiDaosession=session,
+                    stream=aiConfig.get("use_stream", False),
+                    extra=opExtra,
+                )
 
     def getAnswerpath(self, examTestId):
         answerpath = getRealPath(
