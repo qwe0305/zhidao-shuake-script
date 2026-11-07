@@ -84,7 +84,11 @@ class Fucker:
 
         self.uuid = None # actually it's not a uuid, but a random string
         self.cookies = cookies or {}
-        self.proxies = proxies or urllib.request.getproxies() # explicitly use system proxy
+        # 原实现是 `proxies or urllib.request.getproxies()`，
+        # 会在未配置代理时自动使用系统代理（读注册表），
+        # 导致开着 Clash 时所有请求绕道代理而卡死。
+        # 现在改为：只有显式配置了代理才用，否则直连。
+        self.proxies = proxies or {}
         self.headers = headers or {
             "Accept": "*/*",
             "sec-ch-ua": "\" Not A;Brand\";v=\"99\", \"Chromium\";v=\"101\", \"Google Chrome\";v=\"101\"",
@@ -99,6 +103,8 @@ class Fucker:
                       raise_on_status=True,
                       status_forcelist=[500, 502, 503, 504])
         self.session = requests.Session()
+        # 不读系统/环境代理（Windows 注册表里的 Clash 设置），避免国内站请求绕道代理
+        self.session.trust_env = False
         self.session.mount('http://', HTTPAdapter(max_retries=retry))
         self.session.mount('https://', HTTPAdapter(max_retries=retry))
 
