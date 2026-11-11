@@ -65,13 +65,30 @@ def get_provider():
 
 
 def ask_llm(provider, q: dict) -> str | None:
-    """单题问大模型，返回选项字母串；失败返回 None"""
-    opts = "\n".join(q.get("options", []))
+    """单题问大模型，返回选项字母串或 对/错；失败返回 None"""
+    opts = q.get("options", [])
     qtype = q.get("type", "")
+    is_judge = bool(opts) and all(
+        o.strip() in ("对", "错", "正确", "错误", "是", "否") for o in opts)
+    if is_judge or qtype == "判断题":
+        prompt = (
+            "你是答题助手。下面是一道判断题，请只回答：正确 或 错误，不要任何解释。\n\n"
+            f"题目：{q.get('question','')}\n"
+        )
+        try:
+            text = provider.chat(prompt)
+            m = re.search(r"正确|对的?|错误的?|错的?|正确", text or "")
+            if m:
+                token = m.group(0)
+                return "对" if ("对" in token or "正确" in token) else "错"
+            return None
+        except Exception:
+            return None
+
     prompt = (
         f"你是答题助手。下面是一道{qtype or '选择题'}，请只输出正确选项的字母"
         f"（多选连写如 ABC，判断题输出 对/错），不要任何解释。\n\n"
-        f"题目：{q.get('question','')}\n{opts}\n\n"
+        f"题目：{q.get('question','')}\n" + "\n".join(opts) + "\n\n"
         f"按格式输出：```answer\n[\"A\"]\n```"
     )
     try:

@@ -116,42 +116,40 @@ python monitor.py             # 浏览器打开 http://127.0.0.1:8765
 
 ---
 
-## 章节测试 / 考试自动答题（浏览器 + 本地服务）
+## 章节测试 / 考试自动答题（浏览器 + 剪贴板接力）
 
-考试站的接口有独立登录墙，无法像视频那样直连，所以采用「浏览器控制台脚本 + 本地答题服务」方案：
+考试站有 CSP 安全策略，页面禁止访问本地服务，也无法直连考试接口（独立登录墙），所以采用「剪贴板接力」方案：
 
 ```
-浏览器答题页 → 控制台脚本抓题 → 本地答题服务(127.0.0.1:8766)
-                                  ├─ 题库缓存命中 → 直接返回（秒回）
-                                  └─ 未命中 → 调大模型 → 返回并写入题库
+① 控制台脚本 export_questions.js   抓题 → 题目 JSON 复制到剪贴板
+② 本地命令     solve.py            读剪贴板 → 题库优先/大模型兜底 → 答案 JSON 复制回剪贴板
+③ 控制台脚本 fill_answers.js       弹窗 Ctrl+V 粘贴 → 自动勾选 → 自动翻页 → 自动提交
 ```
 
-**三步用法：**
+**使用步骤：**
 
 ```bash
-# 第 1 步：启动本地答题服务（保持运行）
-python exam/server.py
+# ② 本地答题（在 ① 之后运行）
+python exam/solve.py          # 读剪贴板题目，答案写回剪贴板
+python exam/solve.py --dry    # 只看答案不写剪贴板
 
-# 第 2 步（可选）：往题库录答案，之后同题秒回、不再消耗大模型额度
+# 题库手动补充（可选，补充后同题秒答、不消耗模型额度）
 python exam/bank_add.py "心理学的任务=ABC"
-python exam/bank_add.py --file answers.json   # [{"question":"...","answer":"ABC"}, ...]
-
-# 第 3 步：打开答题页 → F12 → Console → 粘贴 exam/fill_auto.js 全部内容 → 回车
-# 脚本自动：抓题 → 请求本地服务 → 勾选 → 翻页 → 提交
 ```
 
 文件说明：
 
 | 文件 | 作用 |
 |---|---|
-| `exam/server.py` | 本地答题服务：题库优先、大模型兜底，自动把新答案写入题库 |
-| `exam/fill_auto.js` | 浏览器控制台脚本：抓题 + 自动填答 + 自动翻页 + 自动提交 |
-| `exam/export_questions.js` | 只导出题目文字（用于人工/AI 补答案） |
-| `exam/fill_answers.js` | 手动答案版填答脚本（答案写死在脚本顶部 ANSWERS） |
+| `exam/export_questions.js` | 控制台脚本①：自动翻页抓题，结构化 JSON 进剪贴板 |
+| `exam/solve.py` | 本地命令②：读剪贴板答题（题库优先/大模型兜底），答案进剪贴板，新答案自动入库 |
+| `exam/fill_answers.js` | 控制台脚本③：弹窗粘贴答案 JSON，自动填答提交 |
 | `exam/bank_add.py` | 题库录入工具 |
+| `exam/server.py` | 本地 HTTP 答题服务（备用方案，供有权限的页面调用） |
 | `data/question_bank.json` | 题库（随使用自动增长） |
 
-> Chrome 首次在 Console 粘贴代码会被拦截，先手打 `allow pasting` 回车即可。
+> - Chrome 首次在 Console 粘贴代码会被拦截，先手打 `allow pasting` 回车
+> - 考试页有 CSP 限制，**不要**用会 fetch 本地服务的脚本（fill_auto.js 已弃用于此场景）
 
 ---
 

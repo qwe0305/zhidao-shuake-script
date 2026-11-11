@@ -8,15 +8,22 @@
    4. 顶部有一个 ANSWERS 对象，把 "1":"ABC" 换成实际答案即可
    ============================================================ */
 (async () => {
-  /* ====================== 答案区（只改这里） ======================
-     键 = 屏幕上显示的题号（从 1 开始）
-     值 = 选项字母，多选直接连写，例如 "ABC"；单选 "B"
-     判断题可写 "对" 或 "错"
+  /* ====================== 答案区 ======================
+     优先：弹窗粘贴 exam/solve.py 生成的答案 JSON（已在剪贴板）
+     备用：把下面 ANSWERS 对象填成 {1:"ABC", 2:"D", ...}
+     键 = 题号，值 = 选项字母（多选连写，判断题可写 对/错）
      ============================================================== */
-  const ANSWERS = {
-    // 1: "ABC",
-    // 2: "D",
-  };
+  let ANSWERS = {};
+  const pasted = prompt("粘贴答案 JSON（solve.py 已把它放进剪贴板，直接 Ctrl+V）：");
+  if (pasted) {
+    try {
+      const parsed = JSON.parse(pasted);
+      ANSWERS = parsed.answers || parsed;
+      console.log(`[ZHS] 已载入 ${Object.keys(ANSWERS).length} 题答案`);
+    } catch (e) {
+      console.error("[ZHS] 粘贴的内容不是合法 JSON，改用脚本内 ANSWERS", e);
+    }
+  }
 
   const AUTO_SUBMIT = true;   // 填完自动点提交
   const MAX_PAGES = 40;       // 最多自动翻多少页
