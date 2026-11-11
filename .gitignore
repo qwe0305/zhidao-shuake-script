@@ -139,3 +139,15 @@ dmypy.json
 aiexamAnswer
 AiDownloadCache
 .vscode
+# 本地临时/私有文件
+qr/
+aiexamAnswer/
+data/
+exam_probe*.py
+exam_bundle*.py
+exam_bundle.txt
+exam_api_probe.py
+exam_sso.py
+logs/manual_run.log
+server_test.log
+!exam/*.js

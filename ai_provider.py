@@ -120,11 +120,25 @@ def parse_answer(text: str) -> list[int]:
             break
 
     if block is None:
-        # 最后一根稻草：全文找形如 [{"id": 1, ...}] 的片段
+        # 最后一根稻草①：全文找形如 [{"id": 1, ...}] 的片段
         match = re.search(r"\[\s*\{.*?\}\s*\]", text, re.DOTALL)
-        if not match:
+        if match:
+            block = match.group(0)
+        else:
+            # 最后一根稻草②：裸字母答案（"A, B, C" / "ABC" / "答案：ABC"）
+            # 映射为选项序号：A=1, B=2, ... 供上游按序取选项
+            runs = re.findall(r"(?<![A-Ha-h])([A-Ha-h]{1,6})(?![A-Ha-h])", text)
+            letters: list[str] = []
+            for run in runs:
+                letters.extend(list(run))
+            if letters:
+                seen: list[int] = []
+                for ch in letters:
+                    idx = ord(ch.upper()) - 64
+                    if idx not in seen:
+                        seen.append(idx)
+                return seen
             raise ValueError(f"未能在模型输出中找到答案块，原文前 200 字：{text[:200]}")
-        block = match.group(0)
 
     # 去尾逗号（模型常见毛病：{"id": 1, "content": "x",}）
     block = re.sub(r",\s*([}\]])", r"\1", block)
@@ -153,7 +167,12 @@ def parse_answer(text: str) -> list[int]:
             else:
                 raise ValueError(f"答案项格式非法：{item}")
         elif isinstance(item, (int, str)):
-            ids.append(int(item))
+            # 允许裸字母答案："A" -> 1, "B" -> 2 ...
+            s = str(item).strip()
+            if len(s) == 1 and s.upper() in "ABCDEFGH":
+                ids.append(ord(s.upper()) - 64)
+            else:
+                ids.append(int(s))
         else:
             raise ValueError(f"答案项格式非法：{item}")
 
@@ -190,7 +209,12 @@ class AIProvider:
 
     @property
     def endpoint(self) -> str:
-        return f"{self.api_base}/v1/chat/completions"
+        base = self.api_base.rstrip("/")
+        # 有些平台的地址自带版本段（智谱 /v4、Azure /openai/deployments/...），
+        # 此时只补 /chat/completions；否则按 OpenAI 兼容惯例补 /v1/chat/completions
+        if re.search(r"/v\d+$", base) or "/deployments/" in base:
+            return f"{base}/chat/completions"
+        return f"{base}/v1/chat/completions"
 
     def _cache_key(self, prompt: str) -> str:
         return hashlib.sha256(prompt.encode("utf-8")).hexdigest()[:32]

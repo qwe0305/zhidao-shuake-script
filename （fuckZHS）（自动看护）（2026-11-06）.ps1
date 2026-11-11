@@ -18,7 +18,7 @@ function Write-Wd($msg) {
 
 function Get-ZhsProc {
     Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
-        Where-Object { $_.CommandLine -like '*fuckZHS*' }
+        Where-Object { $_.CommandLine -like '*fuckZHS*main.py*' }
 }
 
 function Test-Net {
@@ -34,6 +34,12 @@ function Test-Net {
 }
 
 function Start-Zhs {
+    # 智慧树是国内站，走 Clash 代理会卡住/证书报错，强制直连
+    $env:HTTP_PROXY = ''
+    $env:HTTPS_PROXY = ''
+    $env:http_proxy = ''
+    $env:https_proxy = ''
+    $env:ALL_PROXY = ''
     Set-Location $proj
     Start-Process -FilePath $py -ArgumentList 'main.py' -WorkingDirectory $proj `
         -WindowStyle Hidden -RedirectStandardOutput $outLog -RedirectStandardError $errOut

@@ -116,6 +116,45 @@ python monitor.py             # 浏览器打开 http://127.0.0.1:8765
 
 ---
 
+## 章节测试 / 考试自动答题（浏览器 + 本地服务）
+
+考试站的接口有独立登录墙，无法像视频那样直连，所以采用「浏览器控制台脚本 + 本地答题服务」方案：
+
+```
+浏览器答题页 → 控制台脚本抓题 → 本地答题服务(127.0.0.1:8766)
+                                  ├─ 题库缓存命中 → 直接返回（秒回）
+                                  └─ 未命中 → 调大模型 → 返回并写入题库
+```
+
+**三步用法：**
+
+```bash
+# 第 1 步：启动本地答题服务（保持运行）
+python exam/server.py
+
+# 第 2 步（可选）：往题库录答案，之后同题秒回、不再消耗大模型额度
+python exam/bank_add.py "心理学的任务=ABC"
+python exam/bank_add.py --file answers.json   # [{"question":"...","answer":"ABC"}, ...]
+
+# 第 3 步：打开答题页 → F12 → Console → 粘贴 exam/fill_auto.js 全部内容 → 回车
+# 脚本自动：抓题 → 请求本地服务 → 勾选 → 翻页 → 提交
+```
+
+文件说明：
+
+| 文件 | 作用 |
+|---|---|
+| `exam/server.py` | 本地答题服务：题库优先、大模型兜底，自动把新答案写入题库 |
+| `exam/fill_auto.js` | 浏览器控制台脚本：抓题 + 自动填答 + 自动翻页 + 自动提交 |
+| `exam/export_questions.js` | 只导出题目文字（用于人工/AI 补答案） |
+| `exam/fill_answers.js` | 手动答案版填答脚本（答案写死在脚本顶部 ANSWERS） |
+| `exam/bank_add.py` | 题库录入工具 |
+| `data/question_bank.json` | 题库（随使用自动增长） |
+
+> Chrome 首次在 Console 粘贴代码会被拦截，先手打 `allow pasting` 回车即可。
+
+---
+
 ## 后台运行与看护
 
 ```bash

@@ -6,6 +6,15 @@ import requests
 import platform
 from functools import partial
 from contextlib import suppress
+
+# 隐藏窗口/重定向输出时，Windows 控制台默认 GBK，
+# 遇到零宽字符等会直接 UnicodeEncodeError 崩溃，强制 UTF-8
+import sys as _sys
+if _sys.stdout and hasattr(_sys.stdout, "reconfigure"):
+    _sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if _sys.stderr and hasattr(_sys.stderr, "reconfigure"):
+    _sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 from fucker import Fucker
 from logger import logger
 from stability import StabilityGuard
